@@ -14,10 +14,9 @@ contract KYCManager {
         mapping(address user => bool) ops;
     }
 
-    mapping(uint256 regionId => RegionData) public regions;
-    mapping(address user => uint8) public kycLevel;
-
     address public globalAdmin;
+    mapping(address user => uint8) public kycLevel;
+    mapping(uint256 regionId => RegionData) public regions;
 
     ContractState public contractState;
     uint8 public constant MAX_KYC_LEVEL = 255;
