@@ -1,0 +1,1 @@
+forge flatten contracts/KycManager.sol >contracts/flattened/KycManager.sol
