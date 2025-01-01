@@ -5,11 +5,13 @@ script = 'foundry-script'
 out = 'out'
 fs_permissions = [{ access = "read-write", path = "./out" }]
 libs = ['lib', 'node_modules']
+abi = ["abi"]
 remappings = [
     'ds-test/=lib/forge-std/lib/ds-test/src/',
     'forge-std/=lib/forge-std/src/',
 ]
 cache = true
+via_ir = true
 cache_path = 'cache'
 auto_detect_solc = true
 optimizer = true

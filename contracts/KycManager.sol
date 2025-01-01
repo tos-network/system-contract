@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
+import "./interface/IKycManager.sol";
+import "./System.sol";
+
 enum ContractState {
     Active,
     Paused
 }
 
-contract KYCManager {
+contract KycManager is IKycManager, System {
     struct RegionData {
         bool exists;
         bool paused;
@@ -14,12 +17,12 @@ contract KYCManager {
         mapping(address user => bool) ops;
     }
 
-    address public globalAdmin;
     mapping(address user => uint8) public kycLevel;
     mapping(uint256 regionId => RegionData) public regions;
 
     ContractState public contractState;
-    uint8 public constant MAX_KYC_LEVEL = 255;
+    uint8 private constant MAX_KYC_LEVEL = 255;
+    address public immutable override globalAdmin = KYC_ADMINOR_ADDR;
 
     event RegionAdd(uint256 indexed regionId);
     event RegionDel(uint256 indexed regionId);
@@ -36,12 +39,13 @@ contract KYCManager {
         address indexed operator
     );
 
-    event GlobalAdminXfer(address indexed oldAdmin, address indexed newAdmin);
-
     event RegionPaused(uint256 indexed regionId, bool paused);
 
+    event RegionStateChanged(uint256 indexed regionId, bool paused);
+    event OperatorStateChanged(uint256 indexed regionId, address indexed operator, bool added);
+    event ContractStateChanged(ContractState newState);
+
     constructor() payable {
-        globalAdmin = msg.sender;
     }
 
     modifier onlyGlobal() {
@@ -55,11 +59,8 @@ contract KYCManager {
     }
 
     modifier onlyAdmOrGlobal(uint256 regionId) {
-        // read region data once
         RegionData storage region = regions[regionId];
-        bool isAdm = region.admins[msg.sender];
-        bool isGlobal = (msg.sender == globalAdmin);
-        require(isAdm || isGlobal, "NoPerm");
+        require(region.admins[msg.sender] || msg.sender == globalAdmin, "NoPerm");
         _;
     }
 
@@ -73,8 +74,7 @@ contract KYCManager {
         _;
     }
 
-    // global admin fns
-    function addRegionId(uint256 regionId) external onlyGlobal {
+    function addRegionId(uint256 regionId) external override onlyGlobal {
         RegionData storage region = regions[regionId];
         if (!region.exists) {
             region.exists = true;
@@ -82,18 +82,16 @@ contract KYCManager {
         }
     }
 
-    // global admin fns
-    function removeRegionId(uint256 regionId) external onlyGlobal {
+    function removeRegionId(uint256 regionId) external override onlyGlobal {
         RegionData storage region = regions[regionId];
         require(region.exists, "NoR");
         region.exists = false;
         emit RegionDel(regionId);
     }
 
-
-    // global admin fns
     function addRegionAdmin(uint256 regionId, address admin)
         external
+        override
         onlyGlobal
         validR(regionId)
     {
@@ -105,9 +103,9 @@ contract KYCManager {
         }
     }
 
-    // global admin fns
     function removeRegionAdmin(uint256 regionId, address admin)
         external
+        override
         onlyGlobal
         validR(regionId)
     {
@@ -118,24 +116,14 @@ contract KYCManager {
         }
     }
 
-    // global admin fns
-    function transferGlobalAdmin(address newAdmin) external onlyGlobal {
-        require(newAdmin != address(0), "ZeroAdmin");
-        address old = globalAdmin;
-        if (newAdmin != old) {
-            globalAdmin = newAdmin;
-            emit GlobalAdminXfer(old, newAdmin);
-        }
-    }
-
-    // global admin fns
-    function toggleContractState() external onlyGlobal {
-        contractState = contractState == ContractState.Active 
+    function toggleContractState() external override onlyGlobal {
+        ContractState newState = contractState == ContractState.Active 
             ? ContractState.Paused 
             : ContractState.Active;
+        contractState = newState;
+        emit ContractStateChanged(newState);
     }
 
-    // region admin fns
     function addRegionOperator(uint256 regionId, address op)
         external
         validR(regionId)
@@ -149,36 +137,6 @@ contract KYCManager {
         }
     }
 
-    // region admin fns
-    function isRegionAdmin(uint256 regionId, address admin) 
-        external 
-        view 
-        returns (bool) 
-    {
-        return regions[regionId].admins[admin];
-    }
-  
-    // region admin fns
-    function toggleRegionState(uint256 regionId) 
-        external 
-        validR(regionId)
-        onlyAdmOrGlobal(regionId) 
-    {
-        RegionData storage region = regions[regionId];
-        region.paused = !region.paused;
-        emit RegionPaused(regionId, region.paused);
-    }
-
-    // region admin fns
-    function isRegionPaused(uint256 regionId) 
-        external 
-        view 
-        returns (bool) 
-    {
-        return regions[regionId].paused;
-    }
-
-    // region operator fns
     function removeRegionOperator(uint256 regionId, address op)
         external
         validR(regionId)
@@ -191,7 +149,6 @@ contract KYCManager {
         }
     }
 
-    // region operator fn
     function setKYCLevel(
         address user,
         uint8 newLevel,
@@ -202,22 +159,49 @@ contract KYCManager {
         whenNotPaused
         whenRegionNotPaused(regionId)
     {
-        require(newLevel <= MAX_KYC_LEVEL, "InvalidLevel");
+        require(newLevel < MAX_KYC_LEVEL, "InvalidLevel");
         RegionData storage region = regions[regionId];
         require(region.ops[msg.sender], "NotOp");
-        uint8 old = kycLevel[user];
-        if (old != newLevel) {
+        
+        uint8 oldLevel = kycLevel[user];
+        if (oldLevel != newLevel) {
             kycLevel[user] = newLevel;
-            emit KYCUpdate(user, old, newLevel, regionId, msg.sender);
+            emit KYCUpdate(user, oldLevel, newLevel, regionId, msg.sender);
         }
     }
-  
-    // region operator fns
+
+    function toggleRegionState(uint256 regionId) 
+        external 
+        validR(regionId)
+        onlyAdmOrGlobal(regionId) 
+    {
+        RegionData storage region = regions[regionId];
+        bool newState = !region.paused;
+        region.paused = newState;
+        emit RegionStateChanged(regionId, newState);
+    }
+
+    function isRegionAdmin(uint256 regionId, address admin) 
+        external 
+        view 
+        returns (bool) 
+    {
+        return regions[regionId].admins[admin];
+    }
+
     function isRegionOperator(uint256 regionId, address operator) 
         external 
         view 
         returns (bool) 
     {
         return regions[regionId].ops[operator];
+    }
+
+    function isRegionPaused(uint256 regionId) 
+        external 
+        view 
+        returns (bool) 
+    {
+        return regions[regionId].paused;
     }
 }
