@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.29;
 
 import "./interface/IKycManager.sol";
 import "./interface/IKycAdministrator.sol";
@@ -43,7 +43,7 @@ contract KycAdministrator is IKycAdministrator, System {
     mapping(address => mapping(uint256 => bool)) public hasSignedProposal;
     
     // Constant address for KYC Manager contract
-    address public constant kycManager = KYC_MANAGER_ADDR;   
+    address public constant kycManager = KYCLE_MANAGER_ADDR;   
 
     // Initialize function replaces constructor
     function initialize(address initialAdmin) external onlyNotInit {

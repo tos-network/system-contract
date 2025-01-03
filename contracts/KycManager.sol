@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity 0.8.29;
 
 import "./interface/IKycManager.sol";
 import "./System.sol";
@@ -17,12 +17,12 @@ contract KycManager is IKycManager, System {
         mapping(address user => bool) ops;
     }
 
-    mapping(address user => uint8) public kycLevel;
+    mapping(address user => uint256) public kycLevel;
     mapping(uint256 regionId => RegionData) public regions;
 
     ContractState public contractState;
-    uint8 private constant MAX_KYC_LEVEL = 255;
-    address public immutable override globalAdmin = KYC_ADMINOR_ADDR;
+    uint256 private constant MAX_KYC_LEVEL = 255;
+    address public immutable override globalAdmin = KYCLE_ADMINOR_ADDR;  
 
     event RegionAdd(uint256 indexed regionId);
     event RegionDel(uint256 indexed regionId);
@@ -33,8 +33,8 @@ contract KycManager is IKycManager, System {
 
     event KYCUpdate(
         address indexed user,
-        uint8 oldLevel,
-        uint8 newLevel,
+        uint256 oldLevel,
+        uint256 newLevel,
         uint256 indexed regionId,
         address indexed operator
     );
@@ -151,7 +151,7 @@ contract KycManager is IKycManager, System {
 
     function setKYCLevel(
         address user,
-        uint8 newLevel,
+        uint256 newLevel,
         uint256 regionId
     )
         external
@@ -163,7 +163,7 @@ contract KycManager is IKycManager, System {
         RegionData storage region = regions[regionId];
         require(region.ops[msg.sender], "NotOp");
         
-        uint8 oldLevel = kycLevel[user];
+        uint256 oldLevel = kycLevel[user];
         if (oldLevel != newLevel) {
             kycLevel[user] = newLevel;
             emit KYCUpdate(user, oldLevel, newLevel, regionId, msg.sender);
